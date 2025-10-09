@@ -48,6 +48,8 @@ type
     procedure MigrarDadosProdutosPorEmpresa;
     procedure MigrarDadosFornecedores;
     procedure MigrarProdutosPorFornecedor;
+    procedure MigrarDadosDepartamentos;
+    procedure MigrarDadosModelos;
 
   public
   end;
@@ -77,6 +79,8 @@ begin
   MigrarDadosProdutosPorEmpresa;
   MigrarDadosFornecedores;
   MigrarProdutosPorFornecedor;
+  MigrarDadosDepartamentos;
+  MigrarDadosModelos;
 end;
 
 
@@ -199,6 +203,8 @@ begin
   LimparTabelaDestino('PRODUTOS_POR_CODBARRAS');
   LimparTabelaDestino('PRODUTOS');
   LimparTabelaDestino('HISTORICO_ESTOQUE');
+  LimparTabelaDestino('DPTOS_PRODUTOS');
+  LimparTabelaDestino('MODELOS');
 end;
 
 procedure TMigrador.LimparTabelaDestino(const NomeTabela: string);
@@ -494,10 +500,11 @@ const
     '''101'' AS CLAS_DESPESA, ' +
     '''SEM COR'' AS COR, ' +
     'LPAD(f.fab_CODIGO, 4, ''0'') AS MARCA, ' +
-    '''0001'' AS DPTO_PRODUTO, ' +
+    'LPAD(p.prod_SECAOID, 4, ''0'') AS DPTO_PRODUTO, ' +   // seção formatada
+    'LPAD(p.prod_SUBSECAOID, 6, ''0'') AS MODELO, ' +      // subseção formatada
     'LPAD(pg.prodG_CODIGO, 4, ''0'') AS GRUPO, ' +
     'LEFT(md.med_ABREVIATURA, 4) AS UMEDIDA, ' +
-    'LEFT(PROD_ativo, 1) AS STATUS, ' +
+    'LEFT(p.PROD_ativo, 1) AS STATUS, ' +
     '''N'' AS MONTAGEM, ' +
     '''N'' AS ENTREGA, ' +
     '''S'' AS BAIXA_ESTOQUE, ' +
@@ -512,7 +519,7 @@ const
     'p.prod_COMPRIMENTO AS COMPRIMENTO, ' +
     'LEFT(p.prod_codbarras, 13) AS CODIGO_BARRA ' +
     'FROM produto_cad p ' +
-    'LEFT JOIN produto_ncm pn ON pn.prodNCM_ID = p.prod_ID ' +
+    'LEFT JOIN produto_ncm pn ON pn.prodNCM_ID = p.prod_NCM ' +
     'LEFT JOIN medida_cad md ON md.med_ID = p.prod_UNIDADEVENDAID ' +
     'LEFT JOIN produto_grupo pg ON pg.prodG_ID = p.prod_GRUPO ' +
     'LEFT JOIN fabricante_cad f ON f.fab_CODIGO = p.prod_FABRICANTEID ' +
@@ -592,14 +599,16 @@ const
   procedure GarantirGrupo(const Grupo: string);
   begin
     QryFirebird.Close;
-    QryFirebird.SQL.Text := 'SELECT COUNT(*) AS QTD FROM GRUPOS WHERE GRUPO = :G';
+    QryFirebird.SQL.Text :=
+      'SELECT COUNT(*) AS QTD FROM GRUPOS WHERE GRUPO = :G';
     QryFirebird.ParamByName('G').AsString := Grupo;
     QryFirebird.Open;
 
     if QryFirebird.FieldByName('QTD').AsInteger = 0 then
     begin
       QryFirebird.Close;
-      QryFirebird.SQL.Text := 'INSERT INTO GRUPOS (GRUPO, NOME) VALUES (:G, :N)';
+      QryFirebird.SQL.Text :=
+        'INSERT INTO GRUPOS (GRUPO, NOME) VALUES (:G, :N)';
       QryFirebird.ParamByName('G').AsString := Grupo;
       QryFirebird.ParamByName('N').AsString := 'NAO DEFINIDO';
       QryFirebird.ExecSQL;
@@ -611,14 +620,16 @@ const
   procedure GarantirMarca(const Marca: string);
   begin
     QryFirebird.Close;
-    QryFirebird.SQL.Text := 'SELECT COUNT(*) AS QTD FROM MARCAS WHERE MARCA = :M';
+    QryFirebird.SQL.Text :=
+      'SELECT COUNT(*) AS QTD FROM MARCAS WHERE MARCA = :M';
     QryFirebird.ParamByName('M').AsString := Marca;
     QryFirebird.Open;
 
     if QryFirebird.FieldByName('QTD').AsInteger = 0 then
     begin
       QryFirebird.Close;
-      QryFirebird.SQL.Text := 'INSERT INTO MARCAS (MARCA, NOME) VALUES (:M, :N)';
+      QryFirebird.SQL.Text :=
+        'INSERT INTO MARCAS (MARCA, NOME) VALUES (:M, :N)';
       QryFirebird.ParamByName('M').AsString := Marca;
       QryFirebird.ParamByName('N').AsString := 'NAO DEFINIDO';
       QryFirebird.ExecSQL;
@@ -653,14 +664,14 @@ begin
         QryFirebird.SQL.Text :=
           'INSERT INTO PRODUTOS (' +
           'CODIGO, DESCRICAO, CODIGO_ANTERIOR, CLAS_ORIGEM, CLAS_DESPESA, COR, MARCA, ' +
-          'DPTO_PRODUTO, GRUPO, UMEDIDA, STATUS, MONTAGEM, ENTREGA, BAIXA_ESTOQUE, TIPO, ' +
-          'COMPOSICAO, QUANTIDADE_EMBALAGEM, NCM, ' +
+          'DPTO_PRODUTO, MODELO, GRUPO, UMEDIDA, STATUS, MONTAGEM, ENTREGA, ' +
+          'BAIXA_ESTOQUE, TIPO, COMPOSICAO, QUANTIDADE_EMBALAGEM, NCM, ' +
           'PESO_LIQUIDO, PESO_BRUTO, LADO_A_COMPRIMENTO, LADO_B_LARGURA, LADO_C_ALTURA, ' +
-          'CODIGO_BARRA' +
-          ') VALUES (' +
+          'CODIGO_BARRA) ' +
+          'VALUES (' +
           ':CODIGO, :DESCRICAO, :CODIGO_ANTERIOR, :CLAS_ORIGEM, :CLAS_DESPESA, :COR, :MARCA, ' +
-          ':DPTO_PRODUTO, :GRUPO, :UMEDIDA, :STATUS, :MONTAGEM, :ENTREGA, :BAIXA_ESTOQUE, :TIPO, ' +
-          ':COMPOSICAO, :QUANTIDADE_EMBALAGEM, :NCM, ' +
+          ':DPTO_PRODUTO, :MODELO, :GRUPO, :UMEDIDA, :STATUS, :MONTAGEM, :ENTREGA, ' +
+          ':BAIXA_ESTOQUE, :TIPO, :COMPOSICAO, :QUANTIDADE_EMBALAGEM, :NCM, ' +
           ':PESO_LIQUIDO, :PESO_BRUTO, :LADO_A_COMPRIMENTO, :LADO_B_LARGURA, :LADO_C_ALTURA, ' +
           ':CODIGO_BARRA)';
 
@@ -672,6 +683,7 @@ begin
         QryFirebird.ParamByName('COR').AsString := NullToStr(QryMySQL.FieldByName('COR'));
         QryFirebird.ParamByName('MARCA').AsString := Marca;
         QryFirebird.ParamByName('DPTO_PRODUTO').AsString := NullToStr(QryMySQL.FieldByName('DPTO_PRODUTO'));
+        QryFirebird.ParamByName('MODELO').AsString := NullToStr(QryMySQL.FieldByName('MODELO'));
         QryFirebird.ParamByName('GRUPO').AsString := Grupo;
         QryFirebird.ParamByName('UMEDIDA').AsString := Unidade;
         QryFirebird.ParamByName('STATUS').AsString := NullToStr(QryMySQL.FieldByName('STATUS'));
@@ -683,13 +695,11 @@ begin
         QryFirebird.ParamByName('QUANTIDADE_EMBALAGEM').AsInteger :=
           StrToIntDef(NullToStr(QryMySQL.FieldByName('QUANTIDADE_EMBALAGEM'), '1'), 1);
         QryFirebird.ParamByName('NCM').AsString := NullToStr(QryMySQL.FieldByName('NCM'));
-
         QryFirebird.ParamByName('PESO_LIQUIDO').AsFloat := NullToFloat(QryMySQL.FieldByName('PESO_LIQUIDO'));
         QryFirebird.ParamByName('PESO_BRUTO').AsFloat := NullToFloat(QryMySQL.FieldByName('PESO_BRUTO'));
         QryFirebird.ParamByName('LADO_A_COMPRIMENTO').AsFloat := NullToFloat(QryMySQL.FieldByName('COMPRIMENTO'));
         QryFirebird.ParamByName('LADO_B_LARGURA').AsFloat := NullToFloat(QryMySQL.FieldByName('LARGURA'));
         QryFirebird.ParamByName('LADO_C_ALTURA').AsFloat := NullToFloat(QryMySQL.FieldByName('ALTURA'));
-
         QryFirebird.ParamByName('CODIGO_BARRA').AsString := NullToStr(QryMySQL.FieldByName('CODIGO_BARRA'));
 
         QryFirebird.ExecSQL;
@@ -1031,6 +1041,87 @@ begin
   end;
 end;
 
+
+procedure TMigrador.MigrarDadosDepartamentos;
+const
+  SQL_SELECT =
+    'SELECT ' +
+    'LPAD(s.sec_ID, 4, ''0'') AS DPTO_PRODUTO, ' +
+    's.sec_DESCRICAO AS NOME ' +
+    'FROM secao_cad s';
+begin
+  LogMensagem('Iniciando migração de departamentos...');
+
+  try
+    ExecutarConsultaOrigem(SQL_SELECT);
+    LogMensagem('Consulta MySQL executada. Registros encontrados: ' + IntToStr(QryMySQL.RecordCount));
+
+    while not QryMySQL.Eof do
+    begin
+      try
+        QryFirebird.Close;
+        QryFirebird.SQL.Text :=
+          'INSERT INTO DPTOS_PRODUTOS (DPTO_PRODUTO, NOME) VALUES (' +
+          QuotedStr(QryMySQL.FieldByName('DPTO_PRODUTO').AsString) + ', ' +
+          QuotedStr(QryMySQL.FieldByName('NOME').AsString) + ')';
+        QryFirebird.ExecSQL;
+      except
+        on E: Exception do
+          LogMensagem('Erro ao inserir departamento ' +
+            QryMySQL.FieldByName('DPTO_PRODUTO').AsString + ': ' + E.Message);
+      end;
+
+      QryMySQL.Next;
+    end;
+
+    LogMensagem('Migração de departamentos concluída. Total: ' + IntToStr(QryMySQL.RecordCount));
+  except
+    on E: Exception do
+      LogMensagem('Erro durante migração de departamentos: ' + E.Message);
+  end;
+end;
+
+
+procedure TMigrador.MigrarDadosModelos;
+const
+  SQL_SELECT =
+    'SELECT ' +
+    'LPAD(s.secSub_ID, 6, ''0'') AS MODELO, ' +
+    's.secSub_DESCRICAO AS NOME ' +
+    'FROM secao_sub s ' +
+    'GROUP BY s.secSub_ID, s.secSub_DESCRICAO';
+begin
+  LogMensagem('Iniciando migração de modelos...');
+
+  try
+    ExecutarConsultaOrigem(SQL_SELECT);
+    LogMensagem('Consulta MySQL executada. Registros encontrados: ' +
+      IntToStr(QryMySQL.RecordCount));
+
+    while not QryMySQL.Eof do
+    begin
+      try
+        QryFirebird.Close;
+        QryFirebird.SQL.Text :=
+          'INSERT INTO MODELOS (CODIGO, MODELO) VALUES (' +
+          QuotedStr(QryMySQL.FieldByName('MODELO').AsString) + ', ' +
+          QuotedStr(QryMySQL.FieldByName('NOME').AsString) + ')';
+        QryFirebird.ExecSQL;
+      except
+        on E: Exception do
+          LogMensagem('Erro ao inserir modelo ' +
+            QryMySQL.FieldByName('MODELO').AsString + ': ' + E.Message);
+      end;
+
+      QryMySQL.Next;
+    end;
+
+    LogMensagem('Migração de modelos concluída. Total: ' + IntToStr(QryMySQL.RecordCount));
+  except
+    on E: Exception do
+      LogMensagem('Erro durante migração de modelos: ' + E.Message);
+  end;
+end;
 
 
 
