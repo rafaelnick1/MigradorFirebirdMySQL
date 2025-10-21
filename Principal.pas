@@ -308,7 +308,7 @@ procedure TMigrador.MigrarDadosMarcas;
 const
   SQL_SELECT =
     'SELECT ' +
-    'LPAD(f.fab_CODIGO, 4, ''0'') AS MARCA, ' +
+    'LPAD(f.fab_ID, 4, ''0'') AS MARCA, ' +
     'f.fab_NOME AS NOME ' +
     'FROM fabricante_cad f';
 begin
